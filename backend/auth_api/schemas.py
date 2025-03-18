@@ -21,7 +21,7 @@ class UserIn(BaseModel):
 
 
 class LoginIn(BaseModel):
-    username: str
+    email: EmailStr
     password: str
 
 
@@ -33,6 +33,6 @@ class TokenOut(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: int
+    id: str
     username: str
     email: str

@@ -111,3 +111,9 @@ REST_FRAMEWORK = {
         "oauth2_provider.contrib.rest_framework.OAuth2Authentication",
     )
 }
+
+# メールを認証フィールドとして使用する
+AUTHENTICATION_BACKENDS = [
+    "auth_api.backends.EmailBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]

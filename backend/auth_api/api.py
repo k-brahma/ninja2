@@ -48,17 +48,24 @@ auth_router = Router()
 @auth_router.post("/register", response=UserOut)
 def register(request, data: UserIn):
     """新規ユーザー登録エンドポイント"""
+    # ユーザー名とメールアドレスの重複をチェック
+    if User.objects.filter(username=data.username).exists():
+        return HttpResponse("Username already exists", status=400)
+    if User.objects.filter(email=data.email).exists():
+        return HttpResponse("Email already exists", status=400)
+
     with transaction.atomic():
         user = User.objects.create_user(
             username=data.username, email=data.email, password=data.password
         )
-    return user
+    # Userオブジェクトから明示的にUserOutスキーマに合うディクショナリを作成して返す
+    return {"id": str(user.id), "username": user.username, "email": user.email}
 
 
 @auth_router.post("/login", response=TokenOut)
 def login(request, data: LoginIn):
     """ログインエンドポイント - JWTトークンを発行"""
-    user = authenticate(username=data.username, password=data.password)
+    user = authenticate(username=data.email, password=data.password)
     if user is None:
         return HttpResponse("Invalid credentials", status=401)
 
@@ -81,4 +88,5 @@ def logout(request, data: TokenOut):
 @auth_router.get("/me", response=UserOut, auth=JWTAuth())
 def get_user(request):
     """現在のユーザー情報を取得"""
-    return request.auth  # JWTAuthクラスによって認証されたユーザー
+    user = request.auth  # JWTAuthクラスによって認証されたユーザー
+    return {"id": str(user.id), "username": user.username, "email": user.email}
