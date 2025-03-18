@@ -1,51 +1,18 @@
 import datetime
-from typing import Optional
 
 import jwt
 from django.conf import settings
-from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.contrib.auth import authenticate, get_user_model
 from django.db import transaction
 from django.http import HttpResponse
 from ninja import Router
 from ninja.security import HttpBearer
 from oauth2_provider.models import AccessToken
-from pydantic import BaseModel, EmailStr, validator
 
+from .schemas import LoginIn, TokenOut, UserIn, UserOut
 
-# PydanticモデルでリクエストとレスポンスのスキーマをJSON形式で定義
-class UserIn(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-
-    @validator("password")
-    def password_validation(cls, v):
-        try:
-            validate_password(v)
-        except ValidationError as e:
-            raise ValueError(str(e))
-        return v
-
-
-class LoginIn(BaseModel):
-    username: str
-    password: str
-
-
-class TokenOut(BaseModel):
-    access_token: str
-    token_type: str
-    expires_in: int
-    refresh_token: Optional[str] = None
-
-
-class UserOut(BaseModel):
-    id: int
-    username: str
-    email: str
+# カスタムユーザーモデルを取得
+User = get_user_model()
 
 
 # JWT認証のためのベアラートークン認証クラス
@@ -97,7 +64,7 @@ def login(request, data: LoginIn):
 
     # JWTトークン生成
     expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-    payload = {"user_id": user.id, "exp": expiry}
+    payload = {"user_id": str(user.id), "exp": expiry}  # UUIDをstr型に変換
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
     return {"access_token": token, "token_type": "bearer", "expires_in": 3600}  # 1時間

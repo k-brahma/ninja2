@@ -29,8 +29,12 @@ INSTALLED_APPS = [
     "ninja",
     "oauth2_provider",
     # 自作アプリ
-    "api",
+    "auth_api",
+    "blog",
 ]
+
+# カスタムユーザーモデルの設定
+AUTH_USER_MODEL = "auth_api.CustomUser"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

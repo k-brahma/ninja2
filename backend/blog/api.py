@@ -1,9 +1,10 @@
 from typing import List
 
+from auth_api.api import JWTAuth
+from django.http import HttpRequest
 from ninja import NinjaAPI, Router
 from ninja.pagination import paginate
 
-from .auth import JWTAuth, OAuth2Auth, auth_router
 from .models import BlogEntry, Comment
 from .schemas import (
     BlogEntryCreate,
@@ -15,41 +16,26 @@ from .schemas import (
     CommentUpdate,
 )
 
+# NinjaAPI インスタンスの作成
 api = NinjaAPI()
 
-# 認証関連のルーターを登録
-api.add_router("/auth/", auth_router)
+# メインのブログルーター
+router = Router()
 
 
-# 通常のAPIエンドポイント（JWTで保護）
-@api.get("/protected", auth=JWTAuth())
-def protected_endpoint(request):
-    return {"message": f"Hello, {request.auth.username}!"}
-
-
-# OAuth2で保護されたエンドポイント
-@api.get("/oauth2-protected", auth=OAuth2Auth())
-def oauth2_protected_endpoint(request):
-    return {"message": f"OAuth2 authenticated as {request.auth.username}"}
-
-
-# Blog Entry endpoints
-blog_router = Router()
-
-
-@blog_router.get("/", response=List[BlogEntryResponse])
+@router.get("/", response=List[BlogEntryResponse])
 @paginate
 def list_blog_entries(request):
     return BlogEntry.objects.all()
 
 
-@blog_router.get("/{entry_id}", response=BlogEntryDetailResponse)
+@router.get("/{entry_id}", response=BlogEntryDetailResponse)
 def get_blog_entry(request, entry_id: int):
     entry = BlogEntry.objects.get(id=entry_id)
     return entry
 
 
-@blog_router.post("/", response=BlogEntryResponse, auth=JWTAuth())
+@router.post("/", response=BlogEntryResponse, auth=JWTAuth())
 def create_blog_entry(request, payload: BlogEntryCreate):
     entry = BlogEntry.objects.create(
         title=payload.title, content=payload.content, author=request.auth
@@ -57,13 +43,13 @@ def create_blog_entry(request, payload: BlogEntryCreate):
     return entry
 
 
-@blog_router.put("/{entry_id}", response=BlogEntryResponse, auth=JWTAuth())
+@router.put("/{entry_id}", response=BlogEntryResponse, auth=JWTAuth())
 def update_blog_entry(request, entry_id: int, payload: BlogEntryUpdate):
     entry = BlogEntry.objects.get(id=entry_id)
 
     # 認証済みユーザーが作者であることを確認
     if entry.author != request.auth:
-        return api.create_response(request, {"detail": "Not authorized"}, status=403)
+        return router.api.create_response(request, {"detail": "Not authorized"}, status=403)
 
     for attr, value in payload.dict(exclude_unset=True).items():
         setattr(entry, attr, value)
@@ -71,19 +57,19 @@ def update_blog_entry(request, entry_id: int, payload: BlogEntryUpdate):
     return entry
 
 
-@blog_router.delete("/{entry_id}", auth=JWTAuth())
+@router.delete("/{entry_id}", auth=JWTAuth())
 def delete_blog_entry(request, entry_id: int):
     entry = BlogEntry.objects.get(id=entry_id)
 
     # 認証済みユーザーが作者であることを確認
     if entry.author != request.auth:
-        return api.create_response(request, {"detail": "Not authorized"}, status=403)
+        return router.api.create_response(request, {"detail": "Not authorized"}, status=403)
 
     entry.delete()
     return {"success": True}
 
 
-# Comment endpoints
+# コメント用のルーター
 comment_router = Router()
 
 
@@ -107,7 +93,7 @@ def update_comment(request, blog_id: int, comment_id: int, payload: CommentUpdat
 
     # 認証済みユーザーが作者であることを確認
     if comment.author != request.auth:
-        return api.create_response(request, {"detail": "Not authorized"}, status=403)
+        return router.api.create_response(request, {"detail": "Not authorized"}, status=403)
 
     for attr, value in payload.dict(exclude_unset=True).items():
         setattr(comment, attr, value)
@@ -121,12 +107,20 @@ def delete_comment(request, blog_id: int, comment_id: int):
 
     # 認証済みユーザーが作者であることを確認
     if comment.author != request.auth:
-        return api.create_response(request, {"detail": "Not authorized"}, status=403)
+        return router.api.create_response(request, {"detail": "Not authorized"}, status=403)
 
     comment.delete()
     return {"success": True}
 
 
-# ルーターの登録
-api.add_router("/blog/", blog_router)
-api.add_router("/blog/{blog_id}/comments/", comment_router)
+# コメントルーターをブログルーターに登録
+router.add_router("/{blog_id}/comments/", comment_router)
+
+
+# APIに直接登録するための関数
+def register_api_routes(api: NinjaAPI) -> None:
+    """
+    APIにブログ関連のルートを登録します。
+    これは、メインのAPI設定で呼び出されます。
+    """
+    api.add_router("/blog", router)
